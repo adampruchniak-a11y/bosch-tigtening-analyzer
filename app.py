@@ -6,9 +6,9 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 
-st.set_page_config(page_title="Bosch Tightening Analyzer PRO", layout="wide")
+st.set_page_config(page_title="Bosch Tightening Analyzer ", layout="wide")
 
-st.title("Bosch Tightening Analyzer PRO")
+st.title("Bosch Tightening Analyzer ")
 st.write("Wgraj jeden lub wiele plików JSON/TXT z Boscha i zobacz analizę kroków dokręcania.")
 
 
@@ -150,14 +150,14 @@ if uploaded_files:
         st.download_button(
             "Pobierz CSV z analizą",
             data=csv_data,
-            file_name="bosch_multi_analysis.csv",
+            file_name="bosch_multi_analysis.csv - TYLKO NA PRÓBĘ - SŁABO DZIAŁA",
             mime="text/csv"
         )
 
         # Excel PRO
         excel_file = create_excel_file(df)
         st.download_button(
-            "Pobierz Excel PRO (.xlsx)",
+            "Pobierz Excel (.xlsx)",
             data=excel_file,
             file_name="bosch_multi_analysis.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
