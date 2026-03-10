@@ -67,18 +67,26 @@ def extract_step_features(step, file_name, cycle, program, overall_result, date_
     }
 
 
-def show_plot(x, y, xlabel, ylabel, title):
-    if not x or not y:
+def show_plot_from_df(df_in, x_col, y_col, xlabel, ylabel, title):
+    if df_in.empty:
         st.info(f"Brak danych: {title}")
         return
 
-    n = min(len(x), len(y))
-    if n == 0:
+    plot_df = df_in[[x_col, y_col]].dropna()
+
+    if plot_df.empty:
+        st.info(f"Brak danych: {title}")
+        return
+
+    x = plot_df[x_col].tolist()
+    y = plot_df[y_col].tolist()
+
+    if len(x) == 0 or len(y) == 0:
         st.info(f"Brak danych: {title}")
         return
 
     fig, ax = plt.subplots(figsize=(8, 4))
-    ax.plot(x[:n], y[:n])
+    ax.plot(x, y)
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     ax.set_title(title)
@@ -166,7 +174,7 @@ def create_excel_with_native_charts(summary_df, raw_df):
 
             ws_charts.write(current_row, 0, f"Krok: {step_name}", header_fmt)
 
-            if grp["angle"].notna().any() and grp["torque"].notna().any():
+            if grp[["angle", "torque"]].dropna().shape[0] > 0:
                 chart1 = workbook.add_chart({"type": "scatter", "subtype": "straight"})
                 chart1.add_series({
                     "name": f"{step_name} - Moment vs Kąt",
@@ -179,7 +187,7 @@ def create_excel_with_native_charts(summary_df, raw_df):
                 chart1.set_legend({"none": True})
                 ws_charts.insert_chart(current_row + 1, 0, chart1, {"x_scale": 1.15, "y_scale": 1.15})
 
-            if grp["angle"].notna().any() and grp["gradient"].notna().any():
+            if grp[["angle", "gradient"]].dropna().shape[0] > 0:
                 chart2 = workbook.add_chart({"type": "scatter", "subtype": "straight"})
                 chart2.add_series({
                     "name": f"{step_name} - Gradient vs Kąt",
@@ -192,7 +200,7 @@ def create_excel_with_native_charts(summary_df, raw_df):
                 chart2.set_legend({"none": True})
                 ws_charts.insert_chart(current_row + 1, 8, chart2, {"x_scale": 1.15, "y_scale": 1.15})
 
-            if grp["time"].notna().any() and grp["torque"].notna().any():
+            if grp[["time", "torque"]].dropna().shape[0] > 0:
                 chart3 = workbook.add_chart({"type": "scatter", "subtype": "straight"})
                 chart3.add_series({
                     "name": f"{step_name} - Moment vs Czas",
@@ -205,7 +213,7 @@ def create_excel_with_native_charts(summary_df, raw_df):
                 chart3.set_legend({"none": True})
                 ws_charts.insert_chart(current_row + 18, 0, chart3, {"x_scale": 1.15, "y_scale": 1.15})
 
-            if grp["angle_red"].notna().any() and grp["torque_red"].notna().any():
+            if grp[["angle_red", "torque_red"]].dropna().shape[0] > 0:
                 chart4 = workbook.add_chart({"type": "scatter", "subtype": "straight"})
                 chart4.add_series({
                     "name": f"{step_name} - MomentRed vs KątRed",
@@ -344,17 +352,19 @@ if uploaded_files:
 
                 col1, col2 = st.columns(2)
                 with col1:
-                    show_plot(
-                        grp["angle"].dropna().tolist(),
-                        grp["torque"].dropna().tolist(),
+                    show_plot_from_df(
+                        grp,
+                        "angle",
+                        "torque",
                         "Kąt [deg]",
                         "Moment",
                         f"{step_name} - Moment vs Kąt"
                     )
                 with col2:
-                    show_plot(
-                        grp["angle"].dropna().tolist(),
-                        grp["gradient"].dropna().tolist(),
+                    show_plot_from_df(
+                        grp,
+                        "angle",
+                        "gradient",
                         "Kąt [deg]",
                         "Gradient",
                         f"{step_name} - Gradient vs Kąt"
@@ -362,17 +372,19 @@ if uploaded_files:
 
                 col3, col4 = st.columns(2)
                 with col3:
-                    show_plot(
-                        grp["time"].dropna().tolist(),
-                        grp["torque"].dropna().tolist(),
+                    show_plot_from_df(
+                        grp,
+                        "time",
+                        "torque",
                         "Czas",
                         "Moment",
                         f"{step_name} - Moment vs Czas"
                     )
                 with col4:
-                    show_plot(
-                        grp["angle_red"].dropna().tolist(),
-                        grp["torque_red"].dropna().tolist(),
+                    show_plot_from_df(
+                        grp,
+                        "angle_red",
+                        "torque_red",
                         "KątRed [deg]",
                         "MomentRed",
                         f"{step_name} - MomentRed vs KątRed"
