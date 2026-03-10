@@ -67,29 +67,6 @@ def extract_step_features(step, file_name, cycle, program, overall_result, date_
     }
 
 
-def make_plot_image(x, y, xlabel, ylabel, title):
-    if not x or not y:
-        return None
-
-    n = min(len(x), len(y))
-    if n == 0:
-        return None
-
-    fig, ax = plt.subplots(figsize=(8, 4))
-    ax.plot(x[:n], y[:n])
-    ax.set_xlabel(xlabel)
-    ax.set_ylabel(ylabel)
-    ax.set_title(title)
-    ax.grid(True)
-
-    buf = BytesIO()
-    fig.tight_layout()
-    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    buf.seek(0)
-    return buf
-
-
 def show_plot(x, y, xlabel, ylabel, title):
     if not x or not y:
         st.info(f"Brak danych: {title}")
@@ -144,7 +121,7 @@ def build_raw_points_rows(file_name, cycle, program, overall_result, step):
     return rows
 
 
-def create_excel_with_charts(summary_df, raw_df, charts_to_export):
+def create_excel_with_native_charts(summary_df, raw_df):
     output = BytesIO()
 
     with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
@@ -156,18 +133,11 @@ def create_excel_with_charts(summary_df, raw_df, charts_to_export):
         ws_raw = writer.sheets["Raw_Data"]
         ws_charts = workbook.add_worksheet("Charts")
 
-        header_fmt = workbook.add_format({
-            "bold": True,
-            "bg_color": "#D9EAF7",
-            "border": 1
-        })
-        normal_fmt = workbook.add_format({
-            "border": 1
-        })
+        header_fmt = workbook.add_format({"bold": True, "bg_color": "#D9EAF7", "border": 1})
+        normal_fmt = workbook.add_format({"border": 1})
 
         for ws, df_sheet in [(ws_summary, summary_df), (ws_raw, raw_df)]:
             ws.freeze_panes(1, 0)
-
             if len(df_sheet.columns) > 0:
                 ws.autofilter(0, 0, max(len(df_sheet), 1), len(df_sheet.columns) - 1)
 
@@ -179,21 +149,75 @@ def create_excel_with_charts(summary_df, raw_df, charts_to_export):
                 max_len = max([len(str(col))] + [len(v) for v in sample_values]) if sample_values else len(str(col))
                 ws.set_column(idx, idx, min(max(max_len + 2, 12), 35), normal_fmt)
 
-        row_cursor = 0
-        for chart_item in charts_to_export:
-            ws_charts.write(row_cursor, 0, chart_item["title"], header_fmt)
+        # indeksy kolumn w Raw_Data
+        cols = {name: i for i, name in enumerate(raw_df.columns)}
 
-            if chart_item["image"] is not None:
-                ws_charts.insert_image(
-                    row_cursor + 1,
-                    0,
-                    "",
-                    {"image_data": chart_item["image"], "x_scale": 0.9, "y_scale": 0.9}
-                )
-                row_cursor += 24
-            else:
-                ws_charts.write(row_cursor + 1, 0, "Brak danych do wykresu")
-                row_cursor += 4
+        current_row = 0
+
+        # grupowanie po step_name
+        for step_name, grp in raw_df.groupby("step_name", sort=False):
+            start_excel_row = grp.index.min() + 1  # +1 bo nagłówek jest w wierszu 0
+            end_excel_row = grp.index.max() + 1
+
+            ws_charts.write(current_row, 0, f"Krok: {step_name}", header_fmt)
+
+            # Moment vs Kąt
+            if grp["angle"].notna().any() and grp["torque"].notna().any():
+                chart1 = workbook.add_chart({"type": "scatter", "subtype": "straight"})
+                chart1.add_series({
+                    "name":       f"{step_name} - Moment vs Kąt",
+                    "categories": ["Raw_Data", start_excel_row, cols["angle"], end_excel_row, cols["angle"]],
+                    "values":     ["Raw_Data", start_excel_row, cols["torque"], end_excel_row, cols["torque"]],
+                })
+                chart1.set_title({"name": f"{step_name} - Moment vs Kąt"})
+                chart1.set_x_axis({"name": "Kąt [deg]"})
+                chart1.set_y_axis({"name": "Moment"})
+                chart1.set_legend({"none": True})
+                ws_charts.insert_chart(current_row + 1, 0, chart1, {"x_scale": 1.2, "y_scale": 1.2})
+
+            # Gradient vs Kąt
+            if grp["angle"].notna().any() and grp["gradient"].notna().any():
+                chart2 = workbook.add_chart({"type": "scatter", "subtype": "straight"})
+                chart2.add_series({
+                    "name":       f"{step_name} - Gradient vs Kąt",
+                    "categories": ["Raw_Data", start_excel_row, cols["angle"], end_excel_row, cols["angle"]],
+                    "values":     ["Raw_Data", start_excel_row, cols["gradient"], end_excel_row, cols["gradient"]],
+                })
+                chart2.set_title({"name": f"{step_name} - Gradient vs Kąt"})
+                chart2.set_x_axis({"name": "Kąt [deg]"})
+                chart2.set_y_axis({"name": "Gradient"})
+                chart2.set_legend({"none": True})
+                ws_charts.insert_chart(current_row + 1, 8, chart2, {"x_scale": 1.2, "y_scale": 1.2})
+
+            # Moment vs Czas
+            if grp["time"].notna().any() and grp["torque"].notna().any():
+                chart3 = workbook.add_chart({"type": "scatter", "subtype": "straight"})
+                chart3.add_series({
+                    "name":       f"{step_name} - Moment vs Czas",
+                    "categories": ["Raw_Data", start_excel_row, cols["time"], end_excel_row, cols["time"]],
+                    "values":     ["Raw_Data", start_excel_row, cols["torque"], end_excel_row, cols["torque"]],
+                })
+                chart3.set_title({"name": f"{step_name} - Moment vs Czas"})
+                chart3.set_x_axis({"name": "Czas"})
+                chart3.set_y_axis({"name": "Moment"})
+                chart3.set_legend({"none": True})
+                ws_charts.insert_chart(current_row + 18, 0, chart3, {"x_scale": 1.2, "y_scale": 1.2})
+
+            # MomentRed vs KątRed
+            if grp["angle_red"].notna().any() and grp["torque_red"].notna().any():
+                chart4 = workbook.add_chart({"type": "scatter", "subtype": "straight"})
+                chart4.add_series({
+                    "name":       f"{step_name} - MomentRed vs KątRed",
+                    "categories": ["Raw_Data", start_excel_row, cols["angle_red"], end_excel_row, cols["angle_red"]],
+                    "values":     ["Raw_Data", start_excel_row, cols["torque_red"], end_excel_row, cols["torque_red"]],
+                })
+                chart4.set_title({"name": f"{step_name} - MomentRed vs KątRed"})
+                chart4.set_x_axis({"name": "KątRed [deg]"})
+                chart4.set_y_axis({"name": "MomentRed"})
+                chart4.set_legend({"none": True})
+                ws_charts.insert_chart(current_row + 18, 8, chart4, {"x_scale": 1.2, "y_scale": 1.2})
+
+            current_row += 36
 
     output.seek(0)
     return output
@@ -273,8 +297,6 @@ if uploaded_files:
             step_names = [step.get("name", "Unnamed step") for step in steps]
             step_mode = st.radio("Tryb", ["Konkretny krok", "Wszystkie kroki"], horizontal=True)
 
-            charts_to_export = []
-
             if step_mode == "Konkretny krok":
                 selected_step_name = st.selectbox("Wybierz krok programu", step_names)
                 selected_step = next((s for s in steps if s.get("name") == selected_step_name), None)
@@ -296,25 +318,6 @@ if uploaded_files:
                     with col4:
                         show_plot(g["angle_red"], g["torque_red"], "KątRed [deg]", "MomentRed", f"{selected_step_name} - MomentRed vs KątRed")
 
-                    charts_to_export = [
-                        {
-                            "title": f"{selected_file} | {selected_step_name} | Moment vs Kąt",
-                            "image": make_plot_image(g["angle"], g["torque"], "Kąt [deg]", "Moment", f"{selected_step_name} - Moment vs Kąt")
-                        },
-                        {
-                            "title": f"{selected_file} | {selected_step_name} | Gradient vs Kąt",
-                            "image": make_plot_image(g["angle"], g["gradient"], "Kąt [deg]", "Gradient", f"{selected_step_name} - Gradient vs Kąt")
-                        },
-                        {
-                            "title": f"{selected_file} | {selected_step_name} | Moment vs Czas",
-                            "image": make_plot_image(g["time_vals"], g["torque"], "Czas", "Moment", f"{selected_step_name} - Moment vs Czas")
-                        },
-                        {
-                            "title": f"{selected_file} | {selected_step_name} | MomentRed vs KątRed",
-                            "image": make_plot_image(g["angle_red"], g["torque_red"], "KątRed [deg]", "MomentRed", f"{selected_step_name} - MomentRed vs KątRed")
-                        }
-                    ]
-
                     filtered_summary_df = df[
                         (df["file_name"] == selected_file) &
                         (df["step_name"] == selected_step_name)
@@ -326,7 +329,7 @@ if uploaded_files:
                     ].copy()
 
                     try:
-                        excel_file = create_excel_with_charts(filtered_summary_df, filtered_raw_df, charts_to_export)
+                        excel_file = create_excel_with_native_charts(filtered_summary_df, filtered_raw_df)
                         st.download_button(
                             "Pobierz Excel z wykresami",
                             data=excel_file,
@@ -357,30 +360,11 @@ if uploaded_files:
                     with col4:
                         show_plot(g["angle_red"], g["torque_red"], "KątRed [deg]", "MomentRed", f"{step_name} - MomentRed vs KątRed")
 
-                    charts_to_export.extend([
-                        {
-                            "title": f"{selected_file} | {step_name} | Moment vs Kąt",
-                            "image": make_plot_image(g["angle"], g["torque"], "Kąt [deg]", "Moment", f"{step_name} - Moment vs Kąt")
-                        },
-                        {
-                            "title": f"{selected_file} | {step_name} | Gradient vs Kąt",
-                            "image": make_plot_image(g["angle"], g["gradient"], "Kąt [deg]", "Gradient", f"{step_name} - Gradient vs Kąt")
-                        },
-                        {
-                            "title": f"{selected_file} | {step_name} | Moment vs Czas",
-                            "image": make_plot_image(g["time_vals"], g["torque"], "Czas", "Moment", f"{step_name} - Moment vs Czas")
-                        },
-                        {
-                            "title": f"{selected_file} | {step_name} | MomentRed vs KątRed",
-                            "image": make_plot_image(g["angle_red"], g["torque_red"], "KątRed [deg]", "MomentRed", f"{step_name} - MomentRed vs KątRed")
-                        }
-                    ])
-
                 filtered_summary_df = df[df["file_name"] == selected_file].copy()
                 filtered_raw_df = raw_df[raw_df["file_name"] == selected_file].copy()
 
                 try:
-                    excel_file = create_excel_with_charts(filtered_summary_df, filtered_raw_df, charts_to_export)
+                    excel_file = create_excel_with_native_charts(filtered_summary_df, filtered_raw_df)
                     st.download_button(
                         "Pobierz Excel z wykresami",
                         data=excel_file,
