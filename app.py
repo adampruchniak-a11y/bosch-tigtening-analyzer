@@ -10,7 +10,6 @@ st.set_page_config(page_title="Bosch Tightening Analyzer", layout="wide")
 st.title("Bosch Tightening Analyzer")
 st.write("Wrzuć pliki JSON/TXT z Boscha, wybierz konkretny krok albo wszystkie kroki i eksportuj wykresy do Excela.")
 
-
 uploaded_files = st.file_uploader(
     "Wrzuć pliki z Boscha",
     type=["txt", "json"],
@@ -161,7 +160,8 @@ def create_excel_with_charts(summary_df, raw_df, charts_to_export):
 
         for ws, df_sheet in [(ws_summary, summary_df), (ws_raw, raw_df)]:
             ws.freeze_panes(1, 0)
-            ws.autofilter(0, 0, max(len(df_sheet), 1), max(len(df_sheet.columns) - 1, 0))
+            if len(df_sheet.columns) > 0:
+                ws.autofilter(0, 0, max(len(df_sheet), 1), len(df_sheet.columns) - 1)
 
             for col_num, value in enumerate(df_sheet.columns.values):
                 ws.write(0, col_num, value, header_fmt)
@@ -257,3 +257,131 @@ if uploaded_files:
         selected_file = st.selectbox("Wybierz plik", file_list)
 
         selected_file_data = next((item for item in all_data if item["file_name"] == selected_file), None)
+
+        if selected_file_data:
+            data = selected_file_data["data"]
+            steps = data.get("tightening steps", [])
+
+            step_names = [step.get("name", "Unnamed step") for step in steps]
+            step_mode = st.radio("Tryb", ["Konkretny krok", "Wszystkie kroki"], horizontal=True)
+
+            charts_to_export = []
+
+            if step_mode == "Konkretny krok":
+                selected_step_name = st.selectbox("Wybierz krok programu", step_names)
+                selected_step = next((s for s in steps if s.get("name") == selected_step_name), None)
+
+                if selected_step:
+                    g = get_graph_data(selected_step)
+
+                    st.subheader(f"Wykresy dla kroku: {selected_step_name}")
+
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        show_plot(g["angle"], g["torque"], "Kąt [deg]", "Moment", f"{selected_step_name} - Moment vs Kąt")
+                    with col2:
+                        show_plot(g["angle"], g["gradient"], "Kąt [deg]", "Gradient", f"{selected_step_name} - Gradient vs Kąt")
+
+                    col3, col4 = st.columns(2)
+                    with col3:
+                        show_plot(g["time_vals"], g["torque"], "Czas", "Moment", f"{selected_step_name} - Moment vs Czas")
+                    with col4:
+                        show_plot(g["angle_red"], g["torque_red"], "KątRed [deg]", "MomentRed", f"{selected_step_name} - MomentRed vs KątRed")
+
+                    charts_to_export = [
+                        {
+                            "title": f"{selected_file} | {selected_step_name} | Moment vs Kąt",
+                            "image": make_plot_image(g["angle"], g["torque"], "Kąt [deg]", "Moment", f"{selected_step_name} - Moment vs Kąt")
+                        },
+                        {
+                            "title": f"{selected_file} | {selected_step_name} | Gradient vs Kąt",
+                            "image": make_plot_image(g["angle"], g["gradient"], "Kąt [deg]", "Gradient", f"{selected_step_name} - Gradient vs Kąt")
+                        },
+                        {
+                            "title": f"{selected_file} | {selected_step_name} | Moment vs Czas",
+                            "image": make_plot_image(g["time_vals"], g["torque"], "Czas", "Moment", f"{selected_step_name} - Moment vs Czas")
+                        },
+                        {
+                            "title": f"{selected_file} | {selected_step_name} | MomentRed vs KątRed",
+                            "image": make_plot_image(g["angle_red"], g["torque_red"], "KątRed [deg]", "MomentRed", f"{selected_step_name} - MomentRed vs KątRed")
+                        }
+                    ]
+
+                    filtered_summary_df = df[
+                        (df["file_name"] == selected_file) &
+                        (df["step_name"] == selected_step_name)
+                    ].copy()
+
+                    filtered_raw_df = raw_df[
+                        (raw_df["file_name"] == selected_file) &
+                        (raw_df["step_name"] == selected_step_name)
+                    ].copy()
+
+                    try:
+                        excel_file = create_excel_with_charts(filtered_summary_df, filtered_raw_df, charts_to_export)
+                        st.download_button(
+                            "Pobierz Excel z wykresami",
+                            data=excel_file,
+                            file_name="bosch_analysis_with_charts.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        )
+                    except Exception as e:
+                        st.warning(f"Nie udało się wygenerować Excela: {e}")
+
+            else:
+                st.subheader("Wykresy dla wszystkich kroków")
+
+                for step in steps:
+                    step_name = step.get("name", "Unnamed step")
+                    g = get_graph_data(step)
+
+                    st.markdown(f"### {step_name}")
+
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        show_plot(g["angle"], g["torque"], "Kąt [deg]", "Moment", f"{step_name} - Moment vs Kąt")
+                    with col2:
+                        show_plot(g["angle"], g["gradient"], "Kąt [deg]", "Gradient", f"{step_name} - Gradient vs Kąt")
+
+                    col3, col4 = st.columns(2)
+                    with col3:
+                        show_plot(g["time_vals"], g["torque"], "Czas", "Moment", f"{step_name} - Moment vs Czas")
+                    with col4:
+                        show_plot(g["angle_red"], g["torque_red"], "KątRed [deg]", "MomentRed", f"{step_name} - MomentRed vs KątRed")
+
+                    charts_to_export.extend([
+                        {
+                            "title": f"{selected_file} | {step_name} | Moment vs Kąt",
+                            "image": make_plot_image(g["angle"], g["torque"], "Kąt [deg]", "Moment", f"{step_name} - Moment vs Kąt")
+                        },
+                        {
+                            "title": f"{selected_file} | {step_name} | Gradient vs Kąt",
+                            "image": make_plot_image(g["angle"], g["gradient"], "Kąt [deg]", "Gradient", f"{step_name} - Gradient vs Kąt")
+                        },
+                        {
+                            "title": f"{selected_file} | {step_name} | Moment vs Czas",
+                            "image": make_plot_image(g["time_vals"], g["torque"], "Czas", "Moment", f"{step_name} - Moment vs Czas")
+                        },
+                        {
+                            "title": f"{selected_file} | {step_name} | MomentRed vs KątRed",
+                            "image": make_plot_image(g["angle_red"], g["torque_red"], "KątRed [deg]", "MomentRed", f"{step_name} - MomentRed vs KątRed")
+                        }
+                    ])
+
+                filtered_summary_df = df[df["file_name"] == selected_file].copy()
+                filtered_raw_df = raw_df[raw_df["file_name"] == selected_file].copy()
+
+                try:
+                    excel_file = create_excel_with_charts(filtered_summary_df, filtered_raw_df, charts_to_export)
+                    st.download_button(
+                        "Pobierz Excel z wykresami",
+                        data=excel_file,
+                        file_name="bosch_analysis_with_charts.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
+                except Exception as e:
+                    st.warning(f"Nie udało się wygenerować Excela: {e}")
+    else:
+        st.warning("Nie udało się wyciągnąć danych z plików.")
+else:
+    st.info("Wgraj pliki, aby rozpocząć analizę.")
