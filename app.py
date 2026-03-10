@@ -82,7 +82,7 @@ if uploaded_files:
 
         st.dataframe(df, use_container_width=True)
 
-        csv = df.to_csv(index=False).encode("utf-8")
+        csv = df.to_csv(index=False, sep=";").encode("utf-8")
         st.download_button(
             "Pobierz CSV z analizą",
             data=csv,
