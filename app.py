@@ -37,6 +37,23 @@ def safe_pairs(x, y):
     return x[:n], y[:n]
 
 
+def show_plot_direct(x, y, xlabel, ylabel, title):
+    x2, y2 = safe_pairs(x, y)
+
+    if not x2 or not y2:
+        st.info(f"Brak danych: {title}")
+        return
+
+    fig, ax = plt.subplots(figsize=(8, 4))
+    ax.plot(x2, y2)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
+    ax.grid(True)
+    st.pyplot(fig)
+    plt.close(fig)
+
+
 def extract_step_features(step, file_name, cycle, program, overall_result, date_value, id_code):
     g = get_graph_data(step)
     angle = g["angle"]
@@ -72,23 +89,6 @@ def extract_step_features(step, file_name, cycle, program, overall_result, date_
         "final_angle_red": angle_red[-1] if angle_red else None,
         "final_torque_red": torque_red[-1] if torque_red else None,
     }
-
-
-def show_plot_direct(x, y, xlabel, ylabel, title):
-    x2, y2 = safe_pairs(x, y)
-
-    if not x2 or not y2:
-        st.info(f"Brak danych: {title}")
-        return
-
-    fig, ax = plt.subplots(figsize=(8, 4))
-    ax.plot(x2, y2)
-    ax.set_xlabel(xlabel)
-    ax.set_ylabel(ylabel)
-    ax.set_title(title)
-    ax.grid(True)
-    st.pyplot(fig)
-    plt.close(fig)
 
 
 def build_raw_points_rows(file_name, cycle, program, overall_result, date_value, id_code, step):
@@ -170,7 +170,7 @@ def create_excel_with_native_charts(summary_df, raw_df):
             start_excel_row = grp.index.min() + 1
             end_excel_row = grp.index.max() + 1
 
-            if grp["angle"].notna().any() and grp["torque"].notna().any():
+            if grp[["angle", "torque"]].dropna().shape[0] > 0:
                 chart1 = workbook.add_chart({"type": "scatter", "subtype": "straight"})
                 chart1.add_series({
                     "name": f"{step_name} - Moment vs Kąt",
@@ -183,7 +183,7 @@ def create_excel_with_native_charts(summary_df, raw_df):
                 chart1.set_legend({"none": True})
                 ws_charts.insert_chart(current_row + 1, 0, chart1, {"x_scale": 1.15, "y_scale": 1.15})
 
-            if grp["angle"].notna().any() and grp["gradient"].notna().any():
+            if grp[["angle", "gradient"]].dropna().shape[0] > 0:
                 chart2 = workbook.add_chart({"type": "scatter", "subtype": "straight"})
                 chart2.add_series({
                     "name": f"{step_name} - Gradient vs Kąt",
@@ -196,7 +196,7 @@ def create_excel_with_native_charts(summary_df, raw_df):
                 chart2.set_legend({"none": True})
                 ws_charts.insert_chart(current_row + 1, 8, chart2, {"x_scale": 1.15, "y_scale": 1.15})
 
-            if grp["time"].notna().any() and grp["torque"].notna().any():
+            if grp[["time", "torque"]].dropna().shape[0] > 0:
                 chart3 = workbook.add_chart({"type": "scatter", "subtype": "straight"})
                 chart3.add_series({
                     "name": f"{step_name} - Moment vs Czas",
@@ -209,7 +209,7 @@ def create_excel_with_native_charts(summary_df, raw_df):
                 chart3.set_legend({"none": True})
                 ws_charts.insert_chart(current_row + 18, 0, chart3, {"x_scale": 1.15, "y_scale": 1.15})
 
-            if grp["angle_red"].notna().any() and grp["torque_red"].notna().any():
+            if grp[["angle_red", "torque_red"]].dropna().shape[0] > 0:
                 chart4 = workbook.add_chart({"type": "scatter", "subtype": "straight"})
                 chart4.add_series({
                     "name": f"{step_name} - MomentRed vs KątRed",
@@ -319,16 +319,56 @@ if uploaded_files:
         if selected_result != "Wszystkie":
             filtered_df = filtered_df[filtered_df["overall_result"] == selected_result]
 
-        filtered_raw_df = raw_df.copy()
+        selected_items = all_data
 
         if selected_file != "Wszystkie":
-            filtered_raw_df = filtered_raw_df[filtered_raw_df["file_name"] == selected_file]
+            selected_items = [item for item in selected_items if item["file_name"] == selected_file]
 
-        if selected_step != "Wszystkie":
-            filtered_raw_df = filtered_raw_df[filtered_raw_df["step_name"] == selected_step]
+        plot_items = []
+        export_summary_rows = []
+        export_raw_rows = []
 
-        if selected_result != "Wszystkie":
-            filtered_raw_df = filtered_raw_df[filtered_raw_df["overall_result"] == selected_result]
+        for item in selected_items:
+            file_name = item["file_name"]
+            data = item["data"]
+
+            if selected_result != "Wszystkie" and data.get("result") != selected_result:
+                continue
+
+            steps = data.get("tightening steps", [])
+
+            for step in steps:
+                if selected_step != "Wszystkie" and step.get("name") != selected_step:
+                    continue
+
+                plot_items.append((file_name, step))
+
+                export_summary_rows.append(
+                    extract_step_features(
+                        step=step,
+                        file_name=file_name,
+                        cycle=data.get("cycle"),
+                        program=data.get("prg name"),
+                        overall_result=data.get("result"),
+                        date_value=data.get("date"),
+                        id_code=data.get("id code")
+                    )
+                )
+
+                export_raw_rows.extend(
+                    build_raw_points_rows(
+                        file_name=file_name,
+                        cycle=data.get("cycle"),
+                        program=data.get("prg name"),
+                        overall_result=data.get("result"),
+                        date_value=data.get("date"),
+                        id_code=data.get("id code"),
+                        step=step
+                    )
+                )
+
+        export_summary_df = pd.DataFrame(export_summary_rows)
+        export_raw_df = pd.DataFrame(export_raw_rows)
 
         st.subheader("Podsumowanie po filtrze")
         c1, c2, c3 = st.columns(3)
@@ -340,75 +380,54 @@ if uploaded_files:
 
         st.subheader("Wykresy po filtrze")
 
-        if filtered_df.empty:
+        if not plot_items:
             st.warning("Brak danych po wybranych filtrach.")
         else:
-            selected_items = all_data
-
-            if selected_file != "Wszystkie":
-                selected_items = [item for item in all_data if item["file_name"] == selected_file]
-
-            for item in selected_items:
-                file_name = item["file_name"]
-                data = item["data"]
-
-                if selected_result != "Wszystkie" and data.get("result") != selected_result:
-                    continue
-
-                steps = data.get("tightening steps", [])
-
-                if selected_step != "Wszystkie":
-                    steps = [s for s in steps if s.get("name") == selected_step]
-
-                if not steps:
-                    continue
+            for file_name, step in plot_items:
+                step_name = step.get("name", "Unnamed step")
+                g = get_graph_data(step)
 
                 st.markdown(f"## Plik: {file_name}")
+                st.markdown(f"### {step_name}")
 
-                for step in steps:
-                    step_name = step.get("name", "Unnamed step")
-                    g = get_graph_data(step)
+                col1, col2 = st.columns(2)
+                with col1:
+                    show_plot_direct(
+                        g["angle"],
+                        g["torque"],
+                        "Kąt [deg]",
+                        "Moment",
+                        f"{file_name} | {step_name} - Moment vs Kąt"
+                    )
+                with col2:
+                    show_plot_direct(
+                        g["angle"],
+                        g["gradient"],
+                        "Kąt [deg]",
+                        "Gradient",
+                        f"{file_name} | {step_name} - Gradient vs Kąt"
+                    )
 
-                    st.markdown(f"### {step_name}")
-
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        show_plot_direct(
-                            g["angle"],
-                            g["torque"],
-                            "Kąt [deg]",
-                            "Moment",
-                            f"{file_name} | {step_name} - Moment vs Kąt"
-                        )
-                    with col2:
-                        show_plot_direct(
-                            g["angle"],
-                            g["gradient"],
-                            "Kąt [deg]",
-                            "Gradient",
-                            f"{file_name} | {step_name} - Gradient vs Kąt"
-                        )
-
-                    col3, col4 = st.columns(2)
-                    with col3:
-                        show_plot_direct(
-                            g["time_vals"],
-                            g["torque"],
-                            "Czas",
-                            "Moment",
-                            f"{file_name} | {step_name} - Moment vs Czas"
-                        )
-                    with col4:
-                        show_plot_direct(
-                            g["angle_red"],
-                            g["torque_red"],
-                            "KątRed [deg]",
-                            "MomentRed",
-                            f"{file_name} | {step_name} - MomentRed vs KątRed"
-                        )
+                col3, col4 = st.columns(2)
+                with col3:
+                    show_plot_direct(
+                        g["time_vals"],
+                        g["torque"],
+                        "Czas",
+                        "Moment",
+                        f"{file_name} | {step_name} - Moment vs Czas"
+                    )
+                with col4:
+                    show_plot_direct(
+                        g["angle_red"],
+                        g["torque_red"],
+                        "KątRed [deg]",
+                        "MomentRed",
+                        f"{file_name} | {step_name} - MomentRed vs KątRed"
+                    )
 
         try:
-            excel_file = create_excel_with_native_charts(filtered_df.copy(), filtered_raw_df.copy())
+            excel_file = create_excel_with_native_charts(export_summary_df.copy(), export_raw_df.copy())
             st.download_button(
                 "Pobierz Excel z wykresami (po filtrze)",
                 data=excel_file,
