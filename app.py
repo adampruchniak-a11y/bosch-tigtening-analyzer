@@ -10,6 +10,7 @@ st.set_page_config(page_title="Bosch Tightening Analyzer", layout="wide")
 st.title("Bosch Tightening Analyzer")
 st.write("Wrzuć pliki JSON/TXT z Boscha, wybierz konkretny krok albo wszystkie kroki i eksportuj wykresy do Excela.")
 
+
 uploaded_files = st.file_uploader(
     "Wrzuć pliki z Boscha",
     type=["txt", "json"],
@@ -155,11 +156,18 @@ def create_excel_with_charts(summary_df, raw_df, charts_to_export):
         ws_raw = writer.sheets["Raw_Data"]
         ws_charts = workbook.add_worksheet("Charts")
 
-        header_fmt = workbook.add_format({"bold": True, "bg_color": "#D9EAF7", "border": 1})
-        normal_fmt = workbook.add_format({"border": 1})
+        header_fmt = workbook.add_format({
+            "bold": True,
+            "bg_color": "#D9EAF7",
+            "border": 1
+        })
+        normal_fmt = workbook.add_format({
+            "border": 1
+        })
 
         for ws, df_sheet in [(ws_summary, summary_df), (ws_raw, raw_df)]:
             ws.freeze_panes(1, 0)
+
             if len(df_sheet.columns) > 0:
                 ws.autofilter(0, 0, max(len(df_sheet), 1), len(df_sheet.columns) - 1)
 
