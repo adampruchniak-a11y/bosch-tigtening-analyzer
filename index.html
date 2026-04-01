@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Bosch Tightening Analyzer PRO</title>
+  <title>Bosch Tightening Analyzer</title>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/exceljs/dist/exceljs.min.js"></script>
@@ -296,7 +296,7 @@
 </head>
 <body>
   <div class="wrap">
-    <h1>🔧 Bosch Tightening Analyzer PRO</h1>
+    <h1>🔧 Bosch Tightening Analyzer</h1>
     <div class="subtitle">Wczytaj pliki TXT/JSON, filtruj rekordy, przeglądaj kroki i eksportuj raport do Excel z wykresami.</div>
 
     <div class="panel">
@@ -551,8 +551,8 @@
       const search = searchInput.value.trim().toLowerCase();
       const prog = programFilter.value;
       const result = resultFilter.value;
-      const torqueMin = parseFloat(torqueMinFilter.value);
-      const torqueMax = parseFloat(torqueMaxFilter.value);
+      const torqueMinVal = parseFloat(torqueMinFilter.value);
+      const torqueMaxVal = parseFloat(torqueMaxFilter.value);
 
       filteredRows = allRows.filter(r => {
         const haystack = `${r.idCode} ${r.programName} ${r.cycle} ${r.fileName}`.toLowerCase();
@@ -560,8 +560,11 @@
         if (search && !haystack.includes(search)) return false;
         if (prog && r.programName !== prog) return false;
         if (result && r.result !== result) return false;
-        if (!Number.isNaN(torqueMin) && Number(r.nominalTorque ?? -Infinity) < torqueMin) return false;
-        if (!Number.isNaN(torqueMax) && Number(r.nominalTorque ?? Infinity) > torqueMax) return false;
+
+        const torque = parseFloat(r.nominalTorque);
+
+        if (!isNaN(torqueMinVal) && (isNaN(torque) || torque < torqueMinVal)) return false;
+        if (!isNaN(torqueMaxVal) && (isNaN(torque) || torque > torqueMaxVal)) return false;
 
         return true;
       });
@@ -820,7 +823,7 @@
 
       const csvContent = csvRows
         .map(row => row.map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(","))
-        .join("\\n");
+        .join("\n");
 
       const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
       downloadBlob(blob, "bosch_analyzer_export.csv");
@@ -915,7 +918,7 @@
       }
 
       const wsCharts = workbook.addWorksheet("Wykresy");
-      wsCharts.getCell("A1").value = "Bosch Tightening Analyzer PRO";
+      wsCharts.getCell("A1").value = "Bosch Tightening Analyzer";
       wsCharts.getCell("A2").value = selectedRow
         ? `Rekord: ${selectedRow.idCode} | Program: ${selectedRow.programName} | Krok: ${step ? step.name : "-"}`
         : "Brak wybranego rekordu";
