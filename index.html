@@ -1,201 +1,126 @@
 <!DOCTYPE html>
 <html lang="pl">
 <head>
-<meta charset="UTF-8">
-<title>Bosch Analyzer</title>
-
-<style>
-body {
-    background: #0b0b0b;
-    color: white;
-    font-family: Arial;
-    padding: 20px;
-}
-
-h1 {
-    text-align: center;
-}
-
-input, select {
-    padding: 10px;
-    margin: 5px;
-    border-radius: 10px;
-    border: none;
-}
-
-button {
-    padding: 10px 15px;
-    border-radius: 10px;
-    background: #222;
-    color: white;
-    border: 1px solid #444;
-    cursor: pointer;
-}
-
-table {
-    width: 100%;
-    margin-top: 20px;
-    border-collapse: collapse;
-}
-
-th, td {
-    padding: 8px;
-    border-bottom: 1px solid #333;
-    text-align: center;
-}
-
-.ok { color: #00ff99; }
-.nok { color: red; }
-
-canvas {
-    margin-top: 20px;
-    background: #111;
-    border-radius: 10px;
-}
-</style>
-</head>
-
-<body>
-
-<h1>🔧 Bosch Analyzer</h1>
-
-<input type="file" id="files" multiple>
-
-<br>
-
-<label>Tylko NOK</label>
-<input type="checkbox" id="onlyNOK">
-
-<label>Program</label>
-<input type="text" id="programFilter">
-
-<button onclick="parseFiles()">Wczytaj</button>
-
-<div id="count"></div>
-
-<table id="table">
-<thead>
-<tr>
-<th>ID</th>
-<th>Data</th>
-<th>Program</th>
-<th>Wynik</th>
-<th>Moment</th>
-<th>Cycle</th>
-</tr>
-</thead>
-<tbody></tbody>
-</table>
-
-<canvas id="chart" width="800" height="400"></canvas>
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
-<script>
-
-let allData = [];
-
-function parseFiles() {
-    const files = document.getElementById('files').files;
-    allData = [];
-
-    let loaded = 0;
-
-    for (let file of files) {
-        const reader = new FileReader();
-
-        reader.onload = function(e) {
-            try {
-                const data = JSON.parse(e.target.result);
-
-                const row = {
-                    id: data["id code"],
-                    date: data["date"],
-                    program: data["prg name"],
-                    result: data["result"],
-                    torque: data["nominal torque"],
-                    cycle: data["cycle"],
-                    steps: data["tightening steps"]
-                };
-
-                allData.push(row);
-                render();
-
-            } catch (err) {
-                console.log("Błąd pliku:", file.name);
-            }
-        };
-
-        reader.readAsText(file);
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bosch Tightening Analyzer</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --bg: #070707;
+      --panel: #111111;
+      --panel-2: #161616;
+      --border: #2a2a2a;
+      --text: #f5f5f5;
+      --muted: #aaaaaa;
+      --gold: #e6c77a;
+      --green: #39d98a;
+      --red: #ff5d73;
     }
-}
 
-function render() {
-    const tbody = document.querySelector("#table tbody");
-    tbody.innerHTML = "";
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: radial-gradient(circle at top, rgba(230,199,122,0.08), transparent 20%), var(--bg);
+      color: var(--text);
+      padding: 20px;
+    }
 
-    const onlyNOK = document.getElementById("onlyNOK").checked;
-    const programFilter = document.getElementById("programFilter").value.toLowerCase();
+    .wrap {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
 
-    let filtered = allData.filter(r => {
-        if (onlyNOK && r.result !== "NOK") return false;
-        if (programFilter && !r.program.toLowerCase().includes(programFilter)) return false;
-        return true;
-    });
+    h1 {
+      text-align: center;
+      margin: 12px 0 24px;
+      font-size: 36px;
+      color: white;
+    }
 
-    document.getElementById("count").innerText = "Rekordów: " + filtered.length;
+    .panel {
+      background: linear-gradient(180deg, var(--panel), var(--panel-2));
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 16px;
+      margin-bottom: 18px;
+    }
 
-    filtered.forEach(r => {
-        const tr = document.createElement("tr");
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 12px;
+    }
 
-        tr.innerHTML = `
-        <td>${r.id}</td>
-        <td>${r.date}</td>
-        <td>${r.program}</td>
-        <td class="${r.result === "OK" ? "ok" : "nok"}">${r.result}</td>
-        <td>${r.torque}</td>
-        <td>${r.cycle}</td>
-        `;
+    .col-3 { grid-column: span 3; }
+    .col-4 { grid-column: span 4; }
+    .col-6 { grid-column: span 6; }
+    .col-12 { grid-column: span 12; }
 
-        tr.onclick = () => showChart(r);
+    @media (max-width: 1000px) {
+      .col-3, .col-4, .col-6, .col-12 { grid-column: span 12; }
+    }
 
-        tbody.appendChild(tr);
-    });
-}
+    label {
+      display: block;
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
 
-let chart;
+    input, select, button {
+      width: 100%;
+      min-height: 44px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: #0c0c0c;
+      color: white;
+      padding: 10px 12px;
+      font-size: 14px;
+    }
 
-function showChart(row) {
+    button {
+      cursor: pointer;
+      background: #171717;
+      font-weight: 700;
+    }
 
-    const step = row.steps[0];
-    const angles = step.graph["angle values"];
-    const torques = step.graph["torque values"];
+    button:hover {
+      border-color: #6b5a2d;
+      color: var(--gold);
+    }
 
-    const ctx = document.getElementById('chart').getContext('2d');
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 12px;
+    }
 
-    if (chart) chart.destroy();
+    @media (max-width: 1000px) {
+      .stats { grid-template-columns: 1fr 1fr; }
+    }
 
-    chart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: angles,
-            datasets: [{
-                label: 'Moment',
-                data: torques,
-                borderColor: 'white',
-                borderWidth: 1,
-                pointRadius: 0
-            }]
-        },
-        options: {
-            scales: {
-                x: { display: false }
-            }
-        }
-    });
-}
+    .stat {
+      background: #0c0c0c;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 14px;
+      text-align: center;
+    }
 
-</script>
+    .stat .value {
+      font-size: 30px;
+      font-weight: 800;
+      color: var(--gold);
+    }
 
-</body>
-</html>
+    .stat .label {
+      margin-top: 6px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      border-radius: 16
