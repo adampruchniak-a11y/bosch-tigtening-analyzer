@@ -16,9 +16,11 @@
       --gold: #e6c77a;
       --green: #39d98a;
       --red: #ff5d73;
+      --blue: #7fb6ff;
     }
 
     * { box-sizing: border-box; }
+
     body {
       margin: 0;
       font-family: Arial, sans-serif;
@@ -53,13 +55,15 @@
       gap: 12px;
     }
 
+    .col-2 { grid-column: span 2; }
     .col-3 { grid-column: span 3; }
     .col-4 { grid-column: span 4; }
     .col-6 { grid-column: span 6; }
     .col-12 { grid-column: span 12; }
 
     @media (max-width: 1000px) {
-      .col-3, .col-4, .col-6, .col-12 { grid-column: span 12; }
+      .col-2, .col-3, .col-4, .col-6, .col-12 { grid-column: span 12; }
+      h1 { font-size: 28px; }
     }
 
     label {
@@ -123,4 +127,604 @@
 
     .table-wrap {
       overflow-x: auto;
-      border-radius: 16
+      border-radius: 16px;
+      border: 1px solid var(--border);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 1100px;
+      background: #0b0b0b;
+    }
+
+    th, td {
+      padding: 10px 12px;
+      border-bottom: 1px solid #1d1d1d;
+      text-align: left;
+      font-size: 14px;
+      white-space: nowrap;
+    }
+
+    th {
+      background: #111;
+      color: #ddd;
+      position: sticky;
+      top: 0;
+      z-index: 2;
+    }
+
+    tr:hover {
+      background: #151515;
+      cursor: pointer;
+    }
+
+    .ok { color: var(--green); font-weight: 700; }
+    .nok { color: var(--red); font-weight: 700; }
+    .muted { color: var(--muted); }
+
+    .charts {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+
+    @media (max-width: 1000px) {
+      .charts { grid-template-columns: 1fr; }
+    }
+
+    .chart-box {
+      background: #0b0b0b;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 8px;
+      min-height: 340px;
+    }
+
+    canvas {
+      width: 100% !important;
+      height: 320px !important;
+      display: block;
+    }
+
+    .details {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    @media (max-width: 1000px) {
+      .details { grid-template-columns: 1fr; }
+    }
+
+    .box {
+      background: #0b0b0b;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 14px;
+    }
+
+    .step-list {
+      max-height: 320px;
+      overflow: auto;
+    }
+
+    .step-item {
+      border: 1px solid #222;
+      border-radius: 12px;
+      padding: 10px;
+      margin-bottom: 8px;
+    }
+
+    .step-item.active {
+      border-color: #6b5a2d;
+      background: #14120d;
+    }
+
+    .small {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .toolbar > * {
+      flex: 1 1 160px;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>🔧 Bosch Tightening Analyzer</h1>
+
+    <div class="panel">
+      <div class="grid">
+        <div class="col-6">
+          <label>Pliki JSON/TXT Boscha</label>
+          <input id="fileInput" type="file" multiple accept=".txt,.json" />
+        </div>
+        <div class="col-3">
+          <label>&nbsp;</label>
+          <button id="loadBtn" type="button">Wczytaj pliki</button>
+        </div>
+        <div class="col-3">
+          <label>&nbsp;</label>
+          <button id="exportBtn" type="button">Eksport CSV</button>
+        </div>
+
+        <div class="col-3">
+          <label>Szukaj: ID / program / cycle / plik</label>
+          <input id="searchInput" type="text" placeholder="np. C26069CL0227" />
+        </div>
+
+        <div class="col-3">
+          <label>Program</label>
+          <select id="programFilter">
+            <option value="">Wszystkie</option>
+          </select>
+        </div>
+
+        <div class="col-2">
+          <label>Wynik</label>
+          <select id="resultFilter">
+            <option value="">Wszystkie</option>
+            <option value="OK">OK</option>
+            <option value="NOK">NOK</option>
+          </select>
+        </div>
+
+        <div class="col-2">
+          <label>Min nominal torque</label>
+          <input id="torqueMinFilter" type="number" step="0.01" placeholder="0" />
+        </div>
+
+        <div class="col-2">
+          <label>Max nominal torque</label>
+          <input id="torqueMaxFilter" type="number" step="0.01" placeholder="999" />
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="stats" id="stats"></div>
+    </div>
+
+    <div class="panel">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Plik</th>
+              <th>ID code</th>
+              <th>Data</th>
+              <th>Program</th>
+              <th>Wynik</th>
+              <th>Cycle</th>
+              <th>Nominal torque</th>
+              <th>Duration</th>
+              <th>Kroki</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="details">
+        <div class="box">
+          <h3>Szczegóły rekordu</h3>
+          <div id="recordDetails" class="small">Kliknij rekord w tabeli.</div>
+        </div>
+        <div class="box">
+          <h3>Kroki</h3>
+          <div id="stepList" class="step-list small">Brak wybranego rekordu.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="small" id="chartInfo">Wykresy pojawią się po kliknięciu rekordu i kroku.</div>
+      <div class="charts" style="margin-top: 12px;">
+        <div class="chart-box"><canvas id="torqueAngleChart"></canvas></div>
+        <div class="chart-box"><canvas id="torqueIndexChart"></canvas></div>
+        <div class="chart-box"><canvas id="angleIndexChart"></canvas></div>
+        <div class="chart-box"><canvas id="overviewChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let allRows = [];
+    let filteredRows = [];
+    let selectedRow = null;
+    let selectedStepIndex = 0;
+
+    let torqueAngleChart = null;
+    let torqueIndexChart = null;
+    let angleIndexChart = null;
+    let overviewChart = null;
+
+    const fileInput = document.getElementById("fileInput");
+    const loadBtn = document.getElementById("loadBtn");
+    const exportBtn = document.getElementById("exportBtn");
+    const searchInput = document.getElementById("searchInput");
+    const programFilter = document.getElementById("programFilter");
+    const resultFilter = document.getElementById("resultFilter");
+    const torqueMinFilter = document.getElementById("torqueMinFilter");
+    const torqueMaxFilter = document.getElementById("torqueMaxFilter");
+    const tableBody = document.getElementById("tableBody");
+    const statsBox = document.getElementById("stats");
+    const recordDetails = document.getElementById("recordDetails");
+    const stepList = document.getElementById("stepList");
+    const chartInfo = document.getElementById("chartInfo");
+
+    function safeArray(v) {
+      return Array.isArray(v) ? v : [];
+    }
+
+    function parseFunctions(step) {
+      const funcs = {};
+      safeArray(step["tightening functions"]).forEach(f => {
+        funcs[f.name] = f.act;
+      });
+      return funcs;
+    }
+
+    function parseFileContent(text, fileName) {
+      const data = JSON.parse(text);
+
+      const steps = safeArray(data["tightening steps"]).map((step, idx) => {
+        const funcs = parseFunctions(step);
+        return {
+          index: idx,
+          row: step["row"] || "",
+          column: step["column"] || "",
+          name: step["name"] || `Step ${idx + 1}`,
+          result: step["result"] || "",
+          qcode: step["qcode"] || "",
+          lastCmd: step["last cmd"] || "",
+          angleThresholdAct: step["angle threshold act"] ?? null,
+          angleThresholdNom: step["angle threshold nom"] ?? null,
+          angleGlobalThresholdAct: step["angle global threshold act"] ?? null,
+          tfAngle: funcs["TF Angle"] ?? null,
+          torqueMin: funcs["MF TorqueMin"] ?? null,
+          torqueMax: funcs["MF TorqueMax"] ?? null,
+          timeMax: funcs["MFs TimeMax"] ?? null,
+          angleMin: funcs["MF AngleMin"] ?? null,
+          angleMax: funcs["MF AngleMax"] ?? null,
+          graphAngles: safeArray(step.graph && step.graph["angle values"]),
+          graphTorques: safeArray(step.graph && step.graph["torque values"])
+        };
+      });
+
+      return {
+        fileName,
+        hardware: data["hardware"] || "",
+        result: data["result"] || "",
+        programNr: data["prg nr"] || "",
+        programName: data["prg name"] || "",
+        programDate: data["prg date"] || "",
+        cycle: data["cycle"] || "",
+        nominalTorque: data["nominal torque"] ?? null,
+        date: data["date"] || "",
+        idCode: data["id code"] || "",
+        torqueUnit: data["torque unit"] || "",
+        duration: data["duration"] || "",
+        toolSerial: data["tool serial"] || "",
+        qcode: data["qcode"] || "",
+        steps
+      };
+    }
+
+    async function loadFiles() {
+      const files = Array.from(fileInput.files || []);
+      if (!files.length) {
+        alert("Wybierz pliki.");
+        return;
+      }
+
+      allRows = [];
+      filteredRows = [];
+      selectedRow = null;
+      selectedStepIndex = 0;
+
+      for (const file of files) {
+        try {
+          const text = await file.text();
+          const parsed = parseFileContent(text, file.name);
+          allRows.push(parsed);
+        } catch (e) {
+          console.warn("Błąd pliku:", file.name, e);
+        }
+      }
+
+      fillProgramFilter();
+      applyFilters();
+      renderSelectedRecord();
+    }
+
+    function fillProgramFilter() {
+      const programs = [...new Set(allRows.map(r => r.programName).filter(Boolean))].sort();
+      programFilter.innerHTML = `<option value="">Wszystkie</option>`;
+      programs.forEach(p => {
+        const opt = document.createElement("option");
+        opt.value = p;
+        opt.textContent = p;
+        programFilter.appendChild(opt);
+      });
+    }
+
+    function applyFilters() {
+      const search = searchInput.value.trim().toLowerCase();
+      const prog = programFilter.value;
+      const result = resultFilter.value;
+      const torqueMin = parseFloat(torqueMinFilter.value);
+      const torqueMax = parseFloat(torqueMaxFilter.value);
+
+      filteredRows = allRows.filter(r => {
+        const haystack = `${r.idCode} ${r.programName} ${r.cycle} ${r.fileName}`.toLowerCase();
+
+        if (search && !haystack.includes(search)) return false;
+        if (prog && r.programName !== prog) return false;
+        if (result && r.result !== result) return false;
+        if (!Number.isNaN(torqueMin) && Number(r.nominalTorque ?? -Infinity) < torqueMin) return false;
+        if (!Number.isNaN(torqueMax) && Number(r.nominalTorque ?? Infinity) > torqueMax) return false;
+
+        return true;
+      });
+
+      renderStats();
+      renderTable();
+    }
+
+    function renderStats() {
+      const total = filteredRows.length;
+      const ok = filteredRows.filter(r => r.result === "OK").length;
+      const nok = filteredRows.filter(r => r.result === "NOK").length;
+      const avgTorque = total
+        ? (filteredRows.reduce((a, b) => a + (Number(b.nominalTorque) || 0), 0) / total).toFixed(2)
+        : "0.00";
+      const avgSteps = total
+        ? (filteredRows.reduce((a, b) => a + safeArray(b.steps).length, 0) / total).toFixed(1)
+        : "0.0";
+
+      statsBox.innerHTML = `
+        <div class="stat"><div class="value">${total}</div><div class="label">Rekordy</div></div>
+        <div class="stat"><div class="value">${ok}</div><div class="label">OK</div></div>
+        <div class="stat"><div class="value">${nok}</div><div class="label">NOK</div></div>
+        <div class="stat"><div class="value">${avgTorque}</div><div class="label">Śr. nominal torque</div></div>
+        <div class="stat"><div class="value">${avgSteps}</div><div class="label">Śr. liczba kroków</div></div>
+      `;
+    }
+
+    function renderTable() {
+      tableBody.innerHTML = "";
+
+      if (!filteredRows.length) {
+        tableBody.innerHTML = `<tr><td colspan="9" class="muted">Brak wyników.</td></tr>`;
+        return;
+      }
+
+      filteredRows.forEach((row) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${row.fileName}</td>
+          <td>${row.idCode}</td>
+          <td>${row.date}</td>
+          <td>${row.programName}</td>
+          <td class="${row.result === "OK" ? "ok" : "nok"}">${row.result}</td>
+          <td>${row.cycle}</td>
+          <td>${row.nominalTorque ?? ""} ${row.torqueUnit || ""}</td>
+          <td>${row.duration}</td>
+          <td>${row.steps.length}</td>
+        `;
+        tr.addEventListener("click", () => {
+          selectedRow = row;
+          selectedStepIndex = 0;
+          renderSelectedRecord();
+        });
+        tableBody.appendChild(tr);
+      });
+    }
+
+    function renderSelectedRecord() {
+      if (!selectedRow) {
+        recordDetails.innerHTML = "Kliknij rekord w tabeli.";
+        stepList.innerHTML = "Brak wybranego rekordu.";
+        chartInfo.textContent = "Wykresy pojawią się po kliknięciu rekordu i kroku.";
+        destroyCharts();
+        return;
+      }
+
+      recordDetails.innerHTML = `
+        <div><strong>Plik:</strong> ${selectedRow.fileName}</div>
+        <div><strong>ID:</strong> ${selectedRow.idCode}</div>
+        <div><strong>Data:</strong> ${selectedRow.date}</div>
+        <div><strong>Program:</strong> ${selectedRow.programName}</div>
+        <div><strong>Wynik:</strong> <span class="${selectedRow.result === "OK" ? "ok" : "nok"}">${selectedRow.result}</span></div>
+        <div><strong>Cycle:</strong> ${selectedRow.cycle}</div>
+        <div><strong>Nominal torque:</strong> ${selectedRow.nominalTorque ?? ""} ${selectedRow.torqueUnit || ""}</div>
+        <div><strong>Duration:</strong> ${selectedRow.duration}</div>
+        <div><strong>Tool serial:</strong> ${selectedRow.toolSerial}</div>
+      `;
+
+      stepList.innerHTML = "";
+      selectedRow.steps.forEach((step, idx) => {
+        const div = document.createElement("div");
+        div.className = "step-item" + (idx === selectedStepIndex ? " active" : "");
+        div.innerHTML = `
+          <div><strong>${idx + 1}. ${step.name}</strong></div>
+          <div class="small">Row/Col: ${step.row}${step.column} | Result: ${step.result} | TF Angle: ${step.tfAngle ?? "-"}</div>
+          <div class="small">TorqueMin: ${step.torqueMin ?? "-"} | TorqueMax: ${step.torqueMax ?? "-"} | Punkty: ${step.graphTorques.length}</div>
+        `;
+        div.addEventListener("click", () => {
+          selectedStepIndex = idx;
+          renderSelectedRecord();
+        });
+        stepList.appendChild(div);
+      });
+
+      renderCharts();
+    }
+
+    function destroyCharts() {
+      [torqueAngleChart, torqueIndexChart, angleIndexChart, overviewChart].forEach(ch => {
+        if (ch) ch.destroy();
+      });
+      torqueAngleChart = null;
+      torqueIndexChart = null;
+      angleIndexChart = null;
+      overviewChart = null;
+    }
+
+    function makeChart(canvasId, type, labels, data, label, color) {
+      const ctx = document.getElementById(canvasId);
+      return new Chart(ctx, {
+        type,
+        data: {
+          labels,
+          datasets: [{
+            label,
+            data,
+            borderColor: color,
+            backgroundColor: color,
+            pointRadius: 0,
+            tension: 0.1
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { labels: { color: "white" } }
+          },
+          scales: {
+            x: {
+              ticks: { color: "#aaa" },
+              grid: { color: "#222" }
+            },
+            y: {
+              ticks: { color: "#aaa" },
+              grid: { color: "#222" }
+            }
+          }
+        }
+      });
+    }
+
+    function renderCharts() {
+      destroyCharts();
+
+      const step = selectedRow.steps[selectedStepIndex];
+      if (!step) return;
+
+      const angles = step.graphAngles || [];
+      const torques = step.graphTorques || [];
+      const indexes = torques.map((_, i) => i + 1);
+
+      chartInfo.textContent = `Wybrany krok: ${step.name} | Punkty: ${torques.length}`;
+
+      torqueAngleChart = makeChart(
+        "torqueAngleChart",
+        "line",
+        angles,
+        torques,
+        "Moment vs kąt",
+        "#e6c77a"
+      );
+
+      torqueIndexChart = makeChart(
+        "torqueIndexChart",
+        "line",
+        indexes,
+        torques,
+        "Moment vs próbka",
+        "#39d98a"
+      );
+
+      angleIndexChart = makeChart(
+        "angleIndexChart",
+        "line",
+        indexes,
+        angles,
+        "Kąt vs próbka",
+        "#7fb6ff"
+      );
+
+      const summaryLabels = ["TF Angle", "TorqueMin", "TorqueMax", "TimeMax", "AngleMin", "AngleMax"];
+      const summaryValues = [
+        step.tfAngle ?? 0,
+        step.torqueMin ?? 0,
+        step.torqueMax ?? 0,
+        step.timeMax ?? 0,
+        step.angleMin ?? 0,
+        step.angleMax ?? 0
+      ];
+
+      overviewChart = makeChart(
+        "overviewChart",
+        "bar",
+        summaryLabels,
+        summaryValues,
+        "Parametry kroku",
+        "#ffb86b"
+      );
+    }
+
+    function exportCSV() {
+      const rows = filteredRows.length ? filteredRows : allRows;
+      if (!rows.length) {
+        alert("Brak danych do eksportu.");
+        return;
+      }
+
+      const csvRows = [
+        [
+          "fileName", "idCode", "date", "programName", "result",
+          "cycle", "nominalTorque", "duration", "stepsCount"
+        ]
+      ];
+
+      rows.forEach(r => {
+        csvRows.push([
+          r.fileName,
+          r.idCode,
+          r.date,
+          r.programName,
+          r.result,
+          r.cycle,
+          r.nominalTorque ?? "",
+          r.duration,
+          r.steps.length
+        ]);
+      });
+
+      const csvContent = csvRows
+        .map(row => row.map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(","))
+        .join("\n");
+
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "bosch_analyzer_export.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    loadBtn.addEventListener("click", loadFiles);
+    exportBtn.addEventListener("click", exportCSV);
+    searchInput.addEventListener("input", applyFilters);
+    programFilter.addEventListener("change", applyFilters);
+    resultFilter.addEventListener("change", applyFilters);
+    torqueMinFilter.addEventListener("input", applyFilters);
+    torqueMaxFilter.addEventListener("input", applyFilters);
+  </script>
+</body>
+</html>
