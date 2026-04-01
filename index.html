@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<title>Bosch Analyzer</title>
+
+<style>
+body {
+    background: #0b0b0b;
+    color: white;
+    font-family: Arial;
+    padding: 20px;
+}
+
+h1 {
+    text-align: center;
+}
+
+input, select {
+    padding: 10px;
+    margin: 5px;
+    border-radius: 10px;
+    border: none;
+}
+
+button {
+    padding: 10px 15px;
+    border-radius: 10px;
+    background: #222;
+    color: white;
+    border: 1px solid #444;
+    cursor: pointer;
+}
+
+table {
+    width: 100%;
+    margin-top: 20px;
+    border-collapse: collapse;
+}
+
+th, td {
+    padding: 8px;
+    border-bottom: 1px solid #333;
+    text-align: center;
+}
+
+.ok { color: #00ff99; }
+.nok { color: red; }
+
+canvas {
+    margin-top: 20px;
+    background: #111;
+    border-radius: 10px;
+}
+</style>
+</head>
+
+<body>
+
+<h1>🔧 Bosch Analyzer</h1>
+
+<input type="file" id="files" multiple>
+
+<br>
+
+<label>Tylko NOK</label>
+<input type="checkbox" id="onlyNOK">
+
+<label>Program</label>
+<input type="text" id="programFilter">
+
+<button onclick="parseFiles()">Wczytaj</button>
+
+<div id="count"></div>
+
+<table id="table">
+<thead>
+<tr>
+<th>ID</th>
+<th>Data</th>
+<th>Program</th>
+<th>Wynik</th>
+<th>Moment</th>
+<th>Cycle</th>
+</tr>
+</thead>
+<tbody></tbody>
+</table>
+
+<canvas id="chart" width="800" height="400"></canvas>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+
+let allData = [];
+
+function parseFiles() {
+    const files = document.getElementById('files').files;
+    allData = [];
+
+    let loaded = 0;
+
+    for (let file of files) {
+        const reader = new FileReader();
+
+        reader.onload = function(e) {
+            try {
+                const data = JSON.parse(e.target.result);
+
+                const row = {
+                    id: data["id code"],
+                    date: data["date"],
+                    program: data["prg name"],
+                    result: data["result"],
+                    torque: data["nominal torque"],
+                    cycle: data["cycle"],
+                    steps: data["tightening steps"]
+                };
+
+                allData.push(row);
+                render();
+
+            } catch (err) {
+                console.log("Błąd pliku:", file.name);
+            }
+        };
+
+        reader.readAsText(file);
+    }
+}
+
+function render() {
+    const tbody = document.querySelector("#table tbody");
+    tbody.innerHTML = "";
+
+    const onlyNOK = document.getElementById("onlyNOK").checked;
+    const programFilter = document.getElementById("programFilter").value.toLowerCase();
+
+    let filtered = allData.filter(r => {
+        if (onlyNOK && r.result !== "NOK") return false;
+        if (programFilter && !r.program.toLowerCase().includes(programFilter)) return false;
+        return true;
+    });
+
+    document.getElementById("count").innerText = "Rekordów: " + filtered.length;
+
+    filtered.forEach(r => {
+        const tr = document.createElement("tr");
+
+        tr.innerHTML = `
+        <td>${r.id}</td>
+        <td>${r.date}</td>
+        <td>${r.program}</td>
+        <td class="${r.result === "OK" ? "ok" : "nok"}">${r.result}</td>
+        <td>${r.torque}</td>
+        <td>${r.cycle}</td>
+        `;
+
+        tr.onclick = () => showChart(r);
+
+        tbody.appendChild(tr);
+    });
+}
+
+let chart;
+
+function showChart(row) {
+
+    const step = row.steps[0];
+    const angles = step.graph["angle values"];
+    const torques = step.graph["torque values"];
+
+    const ctx = document.getElementById('chart').getContext('2d');
+
+    if (chart) chart.destroy();
+
+    chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: angles,
+            datasets: [{
+                label: 'Moment',
+                data: torques,
+                borderColor: 'white',
+                borderWidth: 1,
+                pointRadius: 0
+            }]
+        },
+        options: {
+            scales: {
+                x: { display: false }
+            }
+        }
+    });
+}
+
+</script>
+
+</body>
+</html>
